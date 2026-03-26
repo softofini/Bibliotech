@@ -29,7 +29,9 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { users as initialUsers, type User } from '@/lib/data'
+import { LoadingState, ErrorState } from '@/components/ui/loading-state'
+import { useUsers } from '@/hooks/use-api'
+import type { User } from '@/lib/types'
 import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
 
 const userTypes = [
@@ -45,13 +47,15 @@ const userTypeColors: Record<string, string> = {
 }
 
 export default function UsuariosPage() {
-  const [users, setUsers] = useState<User[]>(initialUsers)
+  const { users, isLoading, error, refetch, createUser, updateUser, deleteUser } = useUsers()
+  
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -86,31 +90,30 @@ export default function UsuariosPage() {
     setIsDialogOpen(true)
   }
 
-  const handleSaveUser = () => {
-    if (editingUser) {
-      setUsers(
-        users.map((user) =>
-          user.id === editingUser.id
-            ? { ...user, ...formData }
-            : user
-        )
-      )
-    } else {
-      const newUser: User = {
-        id: String(Date.now()),
-        ...formData,
-        createdAt: new Date().toISOString().split('T')[0],
+  const handleSaveUser = async () => {
+    setIsSubmitting(true)
+    try {
+      if (editingUser) {
+        await updateUser(editingUser.id, formData)
+      } else {
+        await createUser(formData)
       }
-      setUsers([...users, newUser])
+      setIsDialogOpen(false)
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsDialogOpen(false)
   }
 
-  const handleDeleteUser = () => {
+  const handleDeleteUser = async () => {
     if (userToDelete) {
-      setUsers(users.filter((user) => user.id !== userToDelete.id))
-      setIsDeleteDialogOpen(false)
-      setUserToDelete(null)
+      setIsSubmitting(true)
+      try {
+        await deleteUser(userToDelete.id)
+        setIsDeleteDialogOpen(false)
+        setUserToDelete(null)
+      } finally {
+        setIsSubmitting(false)
+      }
     }
   }
 
@@ -175,85 +178,91 @@ export default function UsuariosPage() {
           </Select>
         </div>
 
-        {/* Tabela */}
-        <div className="rounded-lg border border-border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Usuário</TableHead>
-                <TableHead className="hidden md:table-cell">Email</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className="hidden lg:table-cell">Cadastro</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.length === 0 ? (
+        {/* Conteúdo */}
+        {isLoading ? (
+          <LoadingState message="Carregando usuários..." />
+        ) : error ? (
+          <ErrorState message={error} onRetry={refetch} />
+        ) : (
+          <div className="rounded-lg border border-border bg-card">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Nenhum usuário encontrado
-                  </TableCell>
+                  <TableHead>Usuário</TableHead>
+                  <TableHead className="hidden md:table-cell">Email</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className="hidden lg:table-cell">Cadastro</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ) : (
-                filteredUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarFallback className="bg-secondary text-secondary-foreground text-sm">
-                            {getInitials(user.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-foreground">{user.name}</p>
-                          <p className="text-sm text-muted-foreground md:hidden">
-                            {user.email}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {user.email}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
-                          userTypeColors[user.type]
-                        }`}
-                      >
-                        {user.type}
-                      </span>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground">
-                      {formatDate(user.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenDialog(user)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                          <span className="sr-only">Editar</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openDeleteDialog(user)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span className="sr-only">Remover</span>
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {filteredUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      Nenhum usuário encontrado
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : (
+                  filteredUsers.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9">
+                            <AvatarFallback className="bg-secondary text-secondary-foreground text-sm">
+                              {getInitials(user.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-foreground">{user.name}</p>
+                            <p className="text-sm text-muted-foreground md:hidden">
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                        {user.email}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
+                            userTypeColors[user.type]
+                          }`}
+                        >
+                          {user.type}
+                        </span>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-muted-foreground">
+                        {formatDate(user.createdAt)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenDialog(user)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            <span className="sr-only">Editar</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openDeleteDialog(user)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Remover</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         {/* Dialog de Cadastro/Edição */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -317,8 +326,8 @@ export default function UsuariosPage() {
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleSaveUser}>
-                {editingUser ? 'Salvar' : 'Adicionar'}
+              <Button onClick={handleSaveUser} disabled={isSubmitting}>
+                {isSubmitting ? 'Salvando...' : editingUser ? 'Salvar' : 'Adicionar'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -330,7 +339,7 @@ export default function UsuariosPage() {
             <DialogHeader>
               <DialogTitle>Confirmar Exclusão</DialogTitle>
               <DialogDescription>
-                Tem certeza que deseja remover o usuário "{userToDelete?.name}"?
+                Tem certeza que deseja remover o usuário &quot;{userToDelete?.name}&quot;?
                 Esta ação não pode ser desfeita.
               </DialogDescription>
             </DialogHeader>
@@ -341,8 +350,8 @@ export default function UsuariosPage() {
               >
                 Cancelar
               </Button>
-              <Button variant="destructive" onClick={handleDeleteUser}>
-                Remover
+              <Button variant="destructive" onClick={handleDeleteUser} disabled={isSubmitting}>
+                {isSubmitting ? 'Removendo...' : 'Remover'}
               </Button>
             </DialogFooter>
           </DialogContent>

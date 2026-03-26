@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { useNotificationCount } from '@/hooks/use-api'
 import Link from 'next/link'
 
 interface HeaderProps {
@@ -18,6 +19,8 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
+  const { count: notificationCount } = useNotificationCount()
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 lg:px-6">
       <div className="flex items-center gap-4">
@@ -40,9 +43,11 @@ export function Header({ onMenuClick }: HeaderProps) {
         <Link href="/notificacoes">
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
-              2
-            </span>
+            {notificationCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </span>
+            )}
             <span className="sr-only">Notificações</span>
           </Button>
         </Link>

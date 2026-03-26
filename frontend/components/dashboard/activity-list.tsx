@@ -1,5 +1,8 @@
+'use client'
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { activities } from '@/lib/data'
+import { Spinner } from '@/components/ui/spinner'
+import { useActivities } from '@/hooks/use-api'
 import { ArrowLeftRight, BookPlus, UserPlus, BookCheck, CalendarClock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -33,6 +36,8 @@ function formatTimestamp(timestamp: string) {
 }
 
 export function ActivityList() {
+  const { activities, isLoading, error } = useActivities(5)
+
   return (
     <Card className="bg-card border-border">
       <CardHeader>
@@ -41,34 +46,48 @@ export function ActivityList() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {activities.map((activity) => {
-          const Icon = activityIcons[activity.action] || ArrowLeftRight
-          const colorClass = activityColors[activity.action] || 'bg-muted text-muted-foreground'
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Spinner className="h-6 w-6 text-primary" />
+          </div>
+        ) : error ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Erro ao carregar atividades
+          </p>
+        ) : activities.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Nenhuma atividade recente
+          </p>
+        ) : (
+          activities.map((activity) => {
+            const Icon = activityIcons[activity.action] || ArrowLeftRight
+            const colorClass = activityColors[activity.action] || 'bg-muted text-muted-foreground'
 
-          return (
-            <div key={activity.id} className="flex items-start gap-4">
-              <div
-                className={cn(
-                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
-                  colorClass
-                )}
-              >
-                <Icon className="h-5 w-5" />
+            return (
+              <div key={activity.id} className="flex items-start gap-4">
+                <div
+                  className={cn(
+                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
+                    colorClass
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {activity.action}
+                  </p>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {activity.description}
+                  </p>
+                </div>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {formatTimestamp(activity.timestamp)}
+                </span>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">
-                  {activity.action}
-                </p>
-                <p className="text-sm text-muted-foreground truncate">
-                  {activity.description}
-                </p>
-              </div>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {formatTimestamp(activity.timestamp)}
-              </span>
-            </div>
-          )
-        })}
+            )
+          })
+        )}
       </CardContent>
     </Card>
   )

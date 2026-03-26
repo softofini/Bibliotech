@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { notifications as initialNotifications, type Notification } from '@/lib/data'
+import { LoadingState, ErrorState } from '@/components/ui/loading-state'
+import { useNotifications } from '@/hooks/use-api'
+import type { Notification } from '@/lib/types'
 import { Bell, CheckCircle, AlertTriangle, Info, Check, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -21,26 +22,27 @@ const notificationColors: Record<string, string> = {
 }
 
 export default function NotificacoesPage() {
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications)
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    error,
+    refetch,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+  } = useNotifications()
 
-  const unreadCount = notifications.filter((n) => !n.read).length
-
-  const markAsRead = (id: string) => {
-    setNotifications(
-      notifications.map((notification) =>
-        notification.id === id ? { ...notification, read: true } : notification
-      )
-    )
+  const handleMarkAsRead = async (id: string) => {
+    await markAsRead(id)
   }
 
-  const markAllAsRead = () => {
-    setNotifications(
-      notifications.map((notification) => ({ ...notification, read: true }))
-    )
+  const handleMarkAllAsRead = async () => {
+    await markAllAsRead()
   }
 
-  const deleteNotification = (id: string) => {
-    setNotifications(notifications.filter((notification) => notification.id !== id))
+  const handleDelete = async (id: string) => {
+    await deleteNotification(id)
   }
 
   const formatDate = (dateString: string) => {
@@ -71,93 +73,99 @@ export default function NotificacoesPage() {
             </p>
           </div>
           {unreadCount > 0 && (
-            <Button variant="outline" onClick={markAllAsRead} className="gap-2">
+            <Button variant="outline" onClick={handleMarkAllAsRead} className="gap-2">
               <Check className="h-4 w-4" />
               Marcar todas como lidas
             </Button>
           )}
         </div>
 
-        {/* Lista de Notificações */}
-        <div className="space-y-4">
-          {notifications.length === 0 ? (
-            <Card className="bg-card border-border">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Bell className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="text-muted-foreground text-center">
-                  Nenhuma notificação no momento
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            notifications.map((notification) => {
-              const Icon = notificationIcons[notification.type]
-              const colorClass = notificationColors[notification.type]
+        {/* Conteúdo */}
+        {isLoading ? (
+          <LoadingState message="Carregando notificações..." />
+        ) : error ? (
+          <ErrorState message={error} onRetry={refetch} />
+        ) : (
+          <div className="space-y-4">
+            {notifications.length === 0 ? (
+              <Card className="bg-card border-border">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Bell className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground text-center">
+                    Nenhuma notificação no momento
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              notifications.map((notification: Notification) => {
+                const Icon = notificationIcons[notification.type]
+                const colorClass = notificationColors[notification.type]
 
-              return (
-                <Card
-                  key={notification.id}
-                  className={cn(
-                    'bg-card border transition-all',
-                    notification.read
-                      ? 'border-border opacity-75'
-                      : 'border-primary/30 bg-primary/5'
-                  )}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-4">
-                      <div
-                        className={cn(
-                          'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border',
-                          colorClass
-                        )}
-                      >
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p className="font-medium text-foreground">
-                              {notification.title}
-                            </p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {notification.message}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              {formatDate(notification.createdAt)}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {!notification.read && (
+                return (
+                  <Card
+                    key={notification.id}
+                    className={cn(
+                      'bg-card border transition-all',
+                      notification.read
+                        ? 'border-border opacity-75'
+                        : 'border-primary/30 bg-primary/5'
+                    )}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        <div
+                          className={cn(
+                            'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border',
+                            colorClass
+                          )}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {notification.title}
+                              </p>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {notification.message}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-2">
+                                {formatDate(notification.createdAt)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {!notification.read && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleMarkAsRead(notification.id)}
+                                  className="h-8 w-8"
+                                >
+                                  <Check className="h-4 w-4" />
+                                  <span className="sr-only">Marcar como lida</span>
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => markAsRead(notification.id)}
-                                className="h-8 w-8"
+                                onClick={() => handleDelete(notification.id)}
+                                className="h-8 w-8 text-destructive hover:text-destructive"
                               >
-                                <Check className="h-4 w-4" />
-                                <span className="sr-only">Marcar como lida</span>
+                                <Trash2 className="h-4 w-4" />
+                                <span className="sr-only">Remover</span>
                               </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteNotification(notification.id)}
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Remover</span>
-                            </Button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })
-          )}
-        </div>
+                    </CardContent>
+                  </Card>
+                )
+              })
+            )}
+          </div>
+        )}
 
         {/* Legenda */}
         <div className="rounded-lg border border-border bg-card p-4">

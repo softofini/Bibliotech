@@ -28,7 +28,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { reservations as initialReservations, users, books, type Reservation } from '@/lib/data'
+import { LoadingState, ErrorState } from '@/components/ui/loading-state'
+import { useReservations, useUsers, useBooks } from '@/hooks/use-api'
+import type { Reservation } from '@/lib/types'
 import { Plus, Search, X } from 'lucide-react'
 
 const statusColors: Record<string, string> = {
@@ -44,17 +46,23 @@ const statusLabels: Record<string, string> = {
 }
 
 export default function ReservasPage() {
-  const [reservations, setReservations] = useState<Reservation[]>(initialReservations)
+  const { reservations, isLoading: reservationsLoading, error, refetch, createReservation, cancelReservation } = useReservations()
+  const { users, isLoading: usersLoading } = useUsers()
+  const { books, isLoading: booksLoading } = useBooks()
+  
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
   const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [formData, setFormData] = useState({
     userId: '',
     bookId: '',
   })
+
+  const isLoading = reservationsLoading || usersLoading || booksLoading
 
   const filteredReservations = reservations.filter((reservation) => {
     const matchesSearch =
@@ -74,36 +82,26 @@ export default function ReservasPage() {
     setIsDialogOpen(true)
   }
 
-  const handleCreateReservation = () => {
-    const selectedUser = users.find((u) => u.id === formData.userId)
-    const selectedBook = books.find((b) => b.id === formData.bookId)
-
-    if (selectedUser && selectedBook) {
-      const newReservation: Reservation = {
-        id: String(Date.now()),
-        userId: formData.userId,
-        userName: selectedUser.name,
-        bookId: formData.bookId,
-        bookTitle: selectedBook.title,
-        reservationDate: new Date().toISOString().split('T')[0],
-        status: 'pendente',
-      }
-      setReservations([newReservation, ...reservations])
+  const handleCreateReservation = async () => {
+    setIsSubmitting(true)
+    try {
+      await createReservation(formData)
+      setIsDialogOpen(false)
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsDialogOpen(false)
   }
 
-  const handleCancelReservation = () => {
+  const handleCancelReservation = async () => {
     if (reservationToCancel) {
-      setReservations(
-        reservations.map((reservation) =>
-          reservation.id === reservationToCancel.id
-            ? { ...reservation, status: 'cancelada' }
-            : reservation
-        )
-      )
-      setIsCancelDialogOpen(false)
-      setReservationToCancel(null)
+      setIsSubmitting(true)
+      try {
+        await cancelReservation(reservationToCancel.id)
+        setIsCancelDialogOpen(false)
+        setReservationToCancel(null)
+      } finally {
+        setIsSubmitting(false)
+      }
     }
   }
 
@@ -165,70 +163,76 @@ export default function ReservasPage() {
           </Select>
         </div>
 
-        {/* Tabela */}
-        <div className="rounded-lg border border-border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Livro</TableHead>
-                <TableHead className="hidden md:table-cell">Usuário</TableHead>
-                <TableHead className="hidden lg:table-cell">Data da Reserva</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredReservations.length === 0 ? (
+        {/* Conteúdo */}
+        {isLoading ? (
+          <LoadingState message="Carregando reservas..." />
+        ) : error ? (
+          <ErrorState message={error} onRetry={refetch} />
+        ) : (
+          <div className="rounded-lg border border-border bg-card">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Nenhuma reserva encontrada
-                  </TableCell>
+                  <TableHead>Livro</TableHead>
+                  <TableHead className="hidden md:table-cell">Usuário</TableHead>
+                  <TableHead className="hidden lg:table-cell">Data da Reserva</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ) : (
-                filteredReservations.map((reservation) => (
-                  <TableRow key={reservation.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-foreground">{reservation.bookTitle}</p>
-                        <p className="text-sm text-muted-foreground md:hidden">
-                          {reservation.userName}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {reservation.userName}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground">
-                      {formatDate(reservation.reservationDate)}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          statusColors[reservation.status]
-                        }`}
-                      >
-                        {statusLabels[reservation.status]}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {reservation.status === 'pendente' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openCancelDialog(reservation)}
-                          className="gap-2 text-destructive hover:text-destructive"
-                        >
-                          <X className="h-4 w-4" />
-                          <span className="hidden sm:inline">Cancelar</span>
-                        </Button>
-                      )}
+              </TableHeader>
+              <TableBody>
+                {filteredReservations.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      Nenhuma reserva encontrada
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : (
+                  filteredReservations.map((reservation) => (
+                    <TableRow key={reservation.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-foreground">{reservation.bookTitle}</p>
+                          <p className="text-sm text-muted-foreground md:hidden">
+                            {reservation.userName}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                        {reservation.userName}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-muted-foreground">
+                        {formatDate(reservation.reservationDate)}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            statusColors[reservation.status]
+                          }`}
+                        >
+                          {statusLabels[reservation.status]}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {reservation.status === 'pendente' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openCancelDialog(reservation)}
+                            className="gap-2 text-destructive hover:text-destructive"
+                          >
+                            <X className="h-4 w-4" />
+                            <span className="hidden sm:inline">Cancelar</span>
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         {/* Dialog de Nova Reserva */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -293,9 +297,9 @@ export default function ReservasPage() {
               </Button>
               <Button
                 onClick={handleCreateReservation}
-                disabled={!formData.userId || !formData.bookId}
+                disabled={!formData.userId || !formData.bookId || isSubmitting}
               >
-                Criar Reserva
+                {isSubmitting ? 'Criando...' : 'Criar Reserva'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -307,7 +311,7 @@ export default function ReservasPage() {
             <DialogHeader>
               <DialogTitle>Confirmar Cancelamento</DialogTitle>
               <DialogDescription>
-                Tem certeza que deseja cancelar a reserva do livro "{reservationToCancel?.bookTitle}" para {reservationToCancel?.userName}?
+                Tem certeza que deseja cancelar a reserva do livro &quot;{reservationToCancel?.bookTitle}&quot; para {reservationToCancel?.userName}?
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -317,8 +321,8 @@ export default function ReservasPage() {
               >
                 Voltar
               </Button>
-              <Button variant="destructive" onClick={handleCancelReservation}>
-                Cancelar Reserva
+              <Button variant="destructive" onClick={handleCancelReservation} disabled={isSubmitting}>
+                {isSubmitting ? 'Cancelando...' : 'Cancelar Reserva'}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -28,17 +28,21 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { books as initialBooks, categories, type Book } from '@/lib/data'
+import { LoadingState, ErrorState } from '@/components/ui/loading-state'
+import { useBooks } from '@/hooks/use-api'
+import { categories, type Book } from '@/lib/types'
 import { Plus, Search, Pencil, Trash2 } from 'lucide-react'
 
 export default function LivrosPage() {
-  const [books, setBooks] = useState<Book[]>(initialBooks)
+  const { books, isLoading, error, refetch, createBook, updateBook, deleteBook } = useBooks()
+  
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingBook, setEditingBook] = useState<Book | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [bookToDelete, setBookToDelete] = useState<Book | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [formData, setFormData] = useState({
     title: '',
@@ -80,37 +84,30 @@ export default function LivrosPage() {
     setIsDialogOpen(true)
   }
 
-  const handleSaveBook = () => {
-    if (editingBook) {
-      setBooks(
-        books.map((book) =>
-          book.id === editingBook.id
-            ? {
-                ...book,
-                ...formData,
-                available: formData.quantity - (book.quantity - book.available),
-                status: formData.quantity > book.quantity - book.available ? 'disponivel' : 'emprestado',
-              }
-            : book
-        )
-      )
-    } else {
-      const newBook: Book = {
-        id: String(Date.now()),
-        ...formData,
-        available: formData.quantity,
-        status: 'disponivel',
+  const handleSaveBook = async () => {
+    setIsSubmitting(true)
+    try {
+      if (editingBook) {
+        await updateBook(editingBook.id, formData)
+      } else {
+        await createBook(formData)
       }
-      setBooks([...books, newBook])
+      setIsDialogOpen(false)
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsDialogOpen(false)
   }
 
-  const handleDeleteBook = () => {
+  const handleDeleteBook = async () => {
     if (bookToDelete) {
-      setBooks(books.filter((book) => book.id !== bookToDelete.id))
-      setIsDeleteDialogOpen(false)
-      setBookToDelete(null)
+      setIsSubmitting(true)
+      try {
+        await deleteBook(bookToDelete.id)
+        setIsDeleteDialogOpen(false)
+        setBookToDelete(null)
+      } finally {
+        setIsSubmitting(false)
+      }
     }
   }
 
@@ -162,82 +159,88 @@ export default function LivrosPage() {
           </Select>
         </div>
 
-        {/* Tabela */}
-        <div className="rounded-lg border border-border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Título</TableHead>
-                <TableHead className="hidden md:table-cell">Autor</TableHead>
-                <TableHead className="hidden lg:table-cell">Categoria</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredBooks.length === 0 ? (
+        {/* Conteúdo */}
+        {isLoading ? (
+          <LoadingState message="Carregando livros..." />
+        ) : error ? (
+          <ErrorState message={error} onRetry={refetch} />
+        ) : (
+          <div className="rounded-lg border border-border bg-card">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Nenhum livro encontrado
-                  </TableCell>
+                  <TableHead>Título</TableHead>
+                  <TableHead className="hidden md:table-cell">Autor</TableHead>
+                  <TableHead className="hidden lg:table-cell">Categoria</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ) : (
-                filteredBooks.map((book) => (
-                  <TableRow key={book.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-foreground">{book.title}</p>
-                        <p className="text-sm text-muted-foreground md:hidden">
-                          {book.author}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {book.author}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground">
-                      {book.category}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          book.available > 0
-                            ? 'bg-success/10 text-success'
-                            : 'bg-warning/10 text-warning'
-                        }`}
-                      >
-                        {book.available > 0
-                          ? `Disponível (${book.available})`
-                          : 'Indisponível'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenDialog(book)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                          <span className="sr-only">Editar</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openDeleteDialog(book)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span className="sr-only">Remover</span>
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {filteredBooks.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      Nenhum livro encontrado
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : (
+                  filteredBooks.map((book) => (
+                    <TableRow key={book.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-foreground">{book.title}</p>
+                          <p className="text-sm text-muted-foreground md:hidden">
+                            {book.author}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                        {book.author}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-muted-foreground">
+                        {book.category}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            book.available > 0
+                              ? 'bg-success/10 text-success'
+                              : 'bg-warning/10 text-warning'
+                          }`}
+                        >
+                          {book.available > 0
+                            ? `Disponível (${book.available})`
+                            : 'Indisponível'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenDialog(book)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            <span className="sr-only">Editar</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openDeleteDialog(book)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Remover</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         {/* Dialog de Cadastro/Edição */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -326,8 +329,8 @@ export default function LivrosPage() {
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleSaveBook}>
-                {editingBook ? 'Salvar' : 'Adicionar'}
+              <Button onClick={handleSaveBook} disabled={isSubmitting}>
+                {isSubmitting ? 'Salvando...' : editingBook ? 'Salvar' : 'Adicionar'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -339,7 +342,7 @@ export default function LivrosPage() {
             <DialogHeader>
               <DialogTitle>Confirmar Exclusão</DialogTitle>
               <DialogDescription>
-                Tem certeza que deseja remover o livro "{bookToDelete?.title}"?
+                Tem certeza que deseja remover o livro &quot;{bookToDelete?.title}&quot;?
                 Esta ação não pode ser desfeita.
               </DialogDescription>
             </DialogHeader>
@@ -350,8 +353,8 @@ export default function LivrosPage() {
               >
                 Cancelar
               </Button>
-              <Button variant="destructive" onClick={handleDeleteBook}>
-                Remover
+              <Button variant="destructive" onClick={handleDeleteBook} disabled={isSubmitting}>
+                {isSubmitting ? 'Removendo...' : 'Remover'}
               </Button>
             </DialogFooter>
           </DialogContent>

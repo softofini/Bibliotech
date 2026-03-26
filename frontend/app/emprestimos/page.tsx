@@ -28,7 +28,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { loans as initialLoans, users, books, type Loan } from '@/lib/data'
+import { LoadingState, ErrorState } from '@/components/ui/loading-state'
+import { useLoans, useUsers, useBooks } from '@/hooks/use-api'
+import type { Loan } from '@/lib/types'
 import { Plus, Search, BookCheck, AlertCircle } from 'lucide-react'
 
 const statusColors: Record<string, string> = {
@@ -44,18 +46,24 @@ const statusLabels: Record<string, string> = {
 }
 
 export default function EmprestimosPage() {
-  const [loans, setLoans] = useState<Loan[]>(initialLoans)
+  const { loans, isLoading: loansLoading, error: loansError, refetch, createLoan, returnBook } = useLoans()
+  const { users, isLoading: usersLoading } = useUsers()
+  const { books, isLoading: booksLoading } = useBooks()
+  
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false)
   const [loanToReturn, setLoanToReturn] = useState<Loan | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [formData, setFormData] = useState({
     userId: '',
     bookId: '',
     returnDate: '',
   })
+
+  const isLoading = loansLoading || usersLoading || booksLoading
 
   const filteredLoans = loans.filter((loan) => {
     const matchesSearch =
@@ -66,6 +74,7 @@ export default function EmprestimosPage() {
   })
 
   const availableBooks = books.filter((book) => book.available > 0)
+  const overdueCount = loans.filter((l) => l.status === 'atrasado').length
 
   const handleOpenDialog = () => {
     setFormData({
@@ -76,37 +85,26 @@ export default function EmprestimosPage() {
     setIsDialogOpen(true)
   }
 
-  const handleCreateLoan = () => {
-    const selectedUser = users.find((u) => u.id === formData.userId)
-    const selectedBook = books.find((b) => b.id === formData.bookId)
-
-    if (selectedUser && selectedBook) {
-      const newLoan: Loan = {
-        id: String(Date.now()),
-        userId: formData.userId,
-        userName: selectedUser.name,
-        bookId: formData.bookId,
-        bookTitle: selectedBook.title,
-        loanDate: new Date().toISOString().split('T')[0],
-        returnDate: formData.returnDate,
-        status: 'ativo',
-      }
-      setLoans([newLoan, ...loans])
+  const handleCreateLoan = async () => {
+    setIsSubmitting(true)
+    try {
+      await createLoan(formData)
+      setIsDialogOpen(false)
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsDialogOpen(false)
   }
 
-  const handleReturnBook = () => {
+  const handleReturnBook = async () => {
     if (loanToReturn) {
-      setLoans(
-        loans.map((loan) =>
-          loan.id === loanToReturn.id
-            ? { ...loan, status: 'finalizado' }
-            : loan
-        )
-      )
-      setIsReturnDialogOpen(false)
-      setLoanToReturn(null)
+      setIsSubmitting(true)
+      try {
+        await returnBook(loanToReturn.id)
+        setIsReturnDialogOpen(false)
+        setLoanToReturn(null)
+      } finally {
+        setIsSubmitting(false)
+      }
     }
   }
 
@@ -143,11 +141,11 @@ export default function EmprestimosPage() {
         </div>
 
         {/* Alertas */}
-        {loans.some((l) => l.status === 'atrasado') && (
+        {overdueCount > 0 && (
           <div className="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/10 p-4">
             <AlertCircle className="h-5 w-5 text-destructive" />
             <p className="text-sm text-foreground">
-              Existem {loans.filter((l) => l.status === 'atrasado').length} empréstimo(s) atrasado(s) que precisam de atenção.
+              Existem {overdueCount} empréstimo(s) atrasado(s) que precisam de atenção.
             </p>
           </div>
         )}
@@ -176,74 +174,80 @@ export default function EmprestimosPage() {
           </Select>
         </div>
 
-        {/* Tabela */}
-        <div className="rounded-lg border border-border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Livro</TableHead>
-                <TableHead className="hidden md:table-cell">Usuário</TableHead>
-                <TableHead className="hidden lg:table-cell">Data Empréstimo</TableHead>
-                <TableHead className="hidden sm:table-cell">Devolução</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLoans.length === 0 ? (
+        {/* Conteúdo */}
+        {isLoading ? (
+          <LoadingState message="Carregando empréstimos..." />
+        ) : loansError ? (
+          <ErrorState message={loansError} onRetry={refetch} />
+        ) : (
+          <div className="rounded-lg border border-border bg-card">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    Nenhum empréstimo encontrado
-                  </TableCell>
+                  <TableHead>Livro</TableHead>
+                  <TableHead className="hidden md:table-cell">Usuário</TableHead>
+                  <TableHead className="hidden lg:table-cell">Data Empréstimo</TableHead>
+                  <TableHead className="hidden sm:table-cell">Devolução</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ) : (
-                filteredLoans.map((loan) => (
-                  <TableRow key={loan.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-foreground">{loan.bookTitle}</p>
-                        <p className="text-sm text-muted-foreground md:hidden">
-                          {loan.userName}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                      {loan.userName}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground">
-                      {formatDate(loan.loanDate)}
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell text-muted-foreground">
-                      {formatDate(loan.returnDate)}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          statusColors[loan.status]
-                        }`}
-                      >
-                        {statusLabels[loan.status]}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {loan.status !== 'finalizado' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openReturnDialog(loan)}
-                          className="gap-2"
-                        >
-                          <BookCheck className="h-4 w-4" />
-                          <span className="hidden sm:inline">Devolver</span>
-                        </Button>
-                      )}
+              </TableHeader>
+              <TableBody>
+                {filteredLoans.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      Nenhum empréstimo encontrado
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : (
+                  filteredLoans.map((loan) => (
+                    <TableRow key={loan.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-foreground">{loan.bookTitle}</p>
+                          <p className="text-sm text-muted-foreground md:hidden">
+                            {loan.userName}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                        {loan.userName}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-muted-foreground">
+                        {formatDate(loan.loanDate)}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-muted-foreground">
+                        {formatDate(loan.returnDate)}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                            statusColors[loan.status]
+                          }`}
+                        >
+                          {statusLabels[loan.status]}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {loan.status !== 'finalizado' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openReturnDialog(loan)}
+                            className="gap-2"
+                          >
+                            <BookCheck className="h-4 w-4" />
+                            <span className="hidden sm:inline">Devolver</span>
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         {/* Dialog de Novo Empréstimo */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -320,9 +324,9 @@ export default function EmprestimosPage() {
               </Button>
               <Button
                 onClick={handleCreateLoan}
-                disabled={!formData.userId || !formData.bookId || !formData.returnDate}
+                disabled={!formData.userId || !formData.bookId || !formData.returnDate || isSubmitting}
               >
-                Registrar Empréstimo
+                {isSubmitting ? 'Registrando...' : 'Registrar Empréstimo'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -334,7 +338,7 @@ export default function EmprestimosPage() {
             <DialogHeader>
               <DialogTitle>Confirmar Devolução</DialogTitle>
               <DialogDescription>
-                Confirmar a devolução do livro "{loanToReturn?.bookTitle}" emprestado para {loanToReturn?.userName}?
+                Confirmar a devolução do livro &quot;{loanToReturn?.bookTitle}&quot; emprestado para {loanToReturn?.userName}?
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -344,8 +348,8 @@ export default function EmprestimosPage() {
               >
                 Cancelar
               </Button>
-              <Button onClick={handleReturnBook}>
-                Confirmar Devolução
+              <Button onClick={handleReturnBook} disabled={isSubmitting}>
+                {isSubmitting ? 'Processando...' : 'Confirmar Devolução'}
               </Button>
             </DialogFooter>
           </DialogContent>
