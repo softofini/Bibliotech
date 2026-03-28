@@ -20,7 +20,7 @@ interface SidebarProps {
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Livros', href: '/livros', icon: BookOpen },
   { name: 'Usuários', href: '/usuarios', icon: Users },
   { name: 'Empréstimos', href: '/emprestimos', icon: ArrowLeftRight },
@@ -50,7 +50,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       >
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-sidebar-border">
-          <Link href="/" className="flex items-center gap-3">
+          <Link href="/dashboard" className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
               <Library className="h-5 w-5 text-primary-foreground" />
             </div>
@@ -69,7 +69,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navegação */}
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navigation.map((item) => {
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href || (item.href === '/dashboard' && pathname === '/')
             return (
               <Link
                 key={item.name}

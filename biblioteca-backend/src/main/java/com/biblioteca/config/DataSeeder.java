@@ -5,6 +5,7 @@ import com.biblioteca.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -25,6 +26,7 @@ public class DataSeeder implements CommandLineRunner {
     private final LoanRepository loanRepository;
     private final ReservationRepository reservationRepository;
     private final NotificationRepository notificationRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public void run(String... args) {
@@ -71,17 +73,23 @@ public class DataSeeder implements CommandLineRunner {
     private void seedUsers() {
         List<User> users = List.of(
             User.builder().name("Ana Silva").email("ana.silva@email.com")
-                .type(User.UserType.ALUNO).createdAt(LocalDate.of(2024, 1, 15)).build(),
+                .password(passwordEncoder.encode("123456")).type(User.UserType.ALUNO)
+                .createdAt(LocalDate.of(2024, 1, 15)).build(),
             User.builder().name("Carlos Oliveira").email("carlos.oliveira@email.com")
-                .type(User.UserType.PROFESSOR).createdAt(LocalDate.of(2024, 2, 20)).build(),
+                .password(passwordEncoder.encode("123456")).type(User.UserType.PROFESSOR)
+                .createdAt(LocalDate.of(2024, 2, 20)).build(),
             User.builder().name("Maria Santos").email("maria.santos@email.com")
-                .type(User.UserType.ALUNO).createdAt(LocalDate.of(2024, 3, 10)).build(),
+                .password(passwordEncoder.encode("123456")).type(User.UserType.ALUNO)
+                .createdAt(LocalDate.of(2024, 3, 10)).build(),
             User.builder().name("João Ferreira").email("joao.ferreira@email.com")
-                .type(User.UserType.VISITANTE).createdAt(LocalDate.of(2024, 4, 5)).build(),
+                .password(passwordEncoder.encode("123456")).type(User.UserType.VISITANTE)
+                .createdAt(LocalDate.of(2024, 4, 5)).build(),
             User.builder().name("Beatriz Lima").email("beatriz.lima@email.com")
-                .type(User.UserType.ALUNO).createdAt(LocalDate.of(2024, 5, 12)).build(),
+                .password(passwordEncoder.encode("123456")).type(User.UserType.ALUNO)
+                .createdAt(LocalDate.of(2024, 5, 12)).build(),
             User.builder().name("Pedro Costa").email("pedro.costa@email.com")
-                .type(User.UserType.PROFESSOR).createdAt(LocalDate.of(2024, 6, 18)).build()
+                .password(passwordEncoder.encode("123456")).type(User.UserType.PROFESSOR)
+                .createdAt(LocalDate.of(2024, 6, 18)).build()
         );
         userRepository.saveAll(users);
         log.debug("{} usuários inseridos.", users.size());

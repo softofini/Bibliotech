@@ -16,6 +16,10 @@ import type {
   UpdateUserDTO,
   CreateLoanDTO,
   CreateReservationDTO,
+  AuthUser,
+  LoginDTO,
+  UpdateProfileDTO,
+  UpdatePasswordDTO,
 } from '@/lib/types'
 
 /**
@@ -464,4 +468,94 @@ export function useNotificationCount() {
   }, [fetchCount])
 
   return { count, isLoading, refetch: fetchCount }
+}
+
+/**
+ * ============================================
+ * HOOK: useAuth
+ * ============================================
+ */
+export function useAuth() {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Carrega usuário do localStorage na inicialização
+  useEffect(() => {
+    const localUser = api.auth.getLocalUser()
+    setUser(localUser)
+    setIsLoading(false)
+  }, [])
+
+  const login = useCallback(async (data: LoginDTO) => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await api.auth.login(data)
+      setUser(response.user)
+      return { success: true }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Erro ao fazer login'
+      setError(message)
+      return { success: false, error: message }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  const logout = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      await api.auth.logout()
+      setUser(null)
+      return { success: true }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Erro ao fazer logout'
+      return { success: false, error: message }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  const updateProfile = useCallback(async (data: UpdateProfileDTO) => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const updatedUser = await api.auth.updateProfile(data)
+      setUser(updatedUser)
+      return { success: true }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Erro ao atualizar perfil'
+      setError(message)
+      return { success: false, error: message }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  const updatePassword = useCallback(async (data: UpdatePasswordDTO) => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      await api.auth.updatePassword(data)
+      return { success: true }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Erro ao atualizar senha'
+      setError(message)
+      return { success: false, error: message }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  return {
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    error,
+    login,
+    logout,
+    updateProfile,
+    updatePassword,
+  }
 }

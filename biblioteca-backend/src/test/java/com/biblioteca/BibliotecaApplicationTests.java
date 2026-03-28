@@ -74,7 +74,7 @@ class BibliotecaApplicationTests {
     @DisplayName("Deve criar usuário aluno via Factory Method")
     void deveCriarAlunoViaFactory() {
         UserDTO dto = UserDTO.builder()
-                .name("Novo Aluno").email("novo.aluno@test.com").type("aluno").build();
+                .name("Novo Aluno").email("novo.aluno@test.com").type("aluno").password("123456").build();
 
         UserDTO created = userService.create(dto);
 
@@ -86,7 +86,7 @@ class BibliotecaApplicationTests {
     @DisplayName("Deve criar usuário professor via Factory Method")
     void deveCriarProfessorViaFactory() {
         UserDTO dto = UserDTO.builder()
-                .name("Novo Professor").email("novo.prof@test.com").type("professor").build();
+                .name("Novo Professor").email("novo.prof@test.com").type("professor").password("123456").build();
 
         UserDTO created = userService.create(dto);
         assertThat(created.getType()).isEqualTo("professor");

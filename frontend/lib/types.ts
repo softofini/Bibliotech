@@ -1,5 +1,39 @@
 // Tipos para integração com o backend Spring Boot
 
+// ============================================
+// AUTENTICAÇÃO
+// ============================================
+
+export interface AuthUser {
+  id: string
+  name: string
+  email: string
+  role: 'admin' | 'bibliotecario' | 'usuario'
+}
+
+export interface LoginDTO {
+  email: string
+  password: string
+}
+
+export interface LoginResponse {
+  user: AuthUser
+  token: string
+}
+
+export interface UpdateProfileDTO {
+  name: string
+}
+
+export interface UpdatePasswordDTO {
+  currentPassword: string
+  newPassword: string
+}
+
+// ============================================
+// LIVROS
+// ============================================
+
 export interface Book {
   id: string
   title: string

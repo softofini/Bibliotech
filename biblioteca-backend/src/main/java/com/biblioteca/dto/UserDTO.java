@@ -1,6 +1,7 @@
 package com.biblioteca.dto;
 
 import com.biblioteca.model.User;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
 import lombok.*;
 
@@ -18,6 +19,10 @@ public class UserDTO {
     @Email(message = "E-mail inválido")
     @NotBlank(message = "E-mail é obrigatório")
     private String email;
+
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @NotBlank(message = "Senha é obrigatória")
+    private String password;
 
     @NotNull(message = "Tipo de usuário é obrigatório")
     private String type;

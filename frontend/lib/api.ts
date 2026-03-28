@@ -19,6 +19,11 @@ import type {
   UpdateUserDTO,
   CreateLoanDTO,
   CreateReservationDTO,
+  LoginDTO,
+  LoginResponse,
+  AuthUser,
+  UpdateProfileDTO,
+  UpdatePasswordDTO,
 } from './types'
 
 // URL base da API - configure conforme seu ambiente
@@ -39,6 +44,14 @@ export class ApiError extends Error {
 }
 
 /**
+ * Obtém o token de autenticação do localStorage
+ */
+function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('auth_token')
+}
+
+/**
  * Função utilitária para fazer requisições HTTP
  */
 async function fetchApi<T>(
@@ -46,9 +59,11 @@ async function fetchApi<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
+  const token = getAuthToken()
   
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
 
   const config: RequestInit = {
@@ -273,7 +288,7 @@ export const loanService = {
    * Remove um empréstimo (apenas para fins administrativos)
    */
   async delete(id: string): Promise<void> {
-    return fetchApi<void>(`api/emprestimos/${id}`, {
+    return fetchApi<void>(`/emprestimos/${id}`, {
       method: 'DELETE',
     })
   },
@@ -397,8 +412,11 @@ export const notificationService = {
  * ============================================
  */
 export const activityService = {
+  /**
+   * Lista atividades recentes
+   */
   async getRecent(limit: number = 10): Promise<Activity[]> {
-    return fetchApi<Activity[]>(`/dashboard/activities?limit=${limit}`)
+    return fetchApi<Activity[]>(`/atividades?limit=${limit}`)
   },
 }
 
@@ -421,7 +439,99 @@ export const dashboardService = {
  * FACADE - API centralizada
  * ============================================
  */
+/**
+ * ============================================
+ * AUTENTICAÇÃO - Endpoints /auth
+ * ============================================
+ */
+export const authService = {
+  /**
+   * Realiza login do usuário
+   */
+  async login(data: LoginDTO): Promise<LoginResponse> {
+    const response = await fetchApi<LoginResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+    // Salva o token no localStorage
+    if (typeof window !== 'undefined' && response.token) {
+      localStorage.setItem('auth_token', response.token)
+      localStorage.setItem('auth_user', JSON.stringify(response.user))
+    }
+    return response
+  },
+
+  /**
+   * Realiza logout do usuário
+   */
+  async logout(): Promise<void> {
+    try {
+      await fetchApi<void>('/auth/logout', { method: 'POST' })
+    } finally {
+      // Remove dados de autenticação independente do resultado
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_user')
+      }
+    }
+  },
+
+  /**
+   * Obtém o usuário logado
+   */
+  async getCurrentUser(): Promise<AuthUser> {
+    return fetchApi<AuthUser>('/auth/me')
+  },
+
+  /**
+   * Obtém usuário salvo localmente (sem requisição)
+   */
+  getLocalUser(): AuthUser | null {
+    if (typeof window === 'undefined') return null
+    const userStr = localStorage.getItem('auth_user')
+    if (!userStr) return null
+    try {
+      return JSON.parse(userStr) as AuthUser
+    } catch {
+      return null
+    }
+  },
+
+  /**
+   * Verifica se está autenticado
+   */
+  isAuthenticated(): boolean {
+    return !!getAuthToken()
+  },
+
+  /**
+   * Atualiza o perfil do usuário
+   */
+  async updateProfile(data: UpdateProfileDTO): Promise<AuthUser> {
+    const response = await fetchApi<AuthUser>('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+    // Atualiza o usuário no localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('auth_user', JSON.stringify(response))
+    }
+    return response
+  },
+
+  /**
+   * Atualiza a senha do usuário
+   */
+  async updatePassword(data: UpdatePasswordDTO): Promise<void> {
+    return fetchApi<void>('/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  },
+}
+
 export const api = {
+  auth: authService,
   books: bookService,
   users: userService,
   loans: loanService,
