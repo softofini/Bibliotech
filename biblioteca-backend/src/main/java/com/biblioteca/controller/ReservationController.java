@@ -13,13 +13,14 @@ import java.util.List;
  * Controller REST para gerenciamento de Reservas.
  *
  * Endpoints:
- *   GET    /api/reservas              — lista todas as reservas
- *   GET    /api/reservas/{id}         — busca por ID
- *   GET    /api/reservas/busca        — busca por usuário ou livro (?q=)
- *   GET    /api/reservas/status       — filtra por status (?status=pendente|disponivel|cancelada)
- *   POST   /api/reservas              — cria nova reserva
- *   POST   /api/reservas/{id}/cancelar — cancela reserva
- *   DELETE /api/reservas/{id}         — remove reserva
+ * GET /api/reservas — lista todas as reservas
+ * GET /api/reservas/{id} — busca por ID
+ * GET /api/reservas/busca — busca por usuário ou livro (?q=)
+ * GET /api/reservas/status — filtra por status
+ * (?status=pendente|disponivel|cancelada)
+ * POST /api/reservas — cria nova reserva
+ * POST /api/reservas/{id}/cancelar — cancela reserva
+ * DELETE /api/reservas/{id} — remove reserva
  */
 @RestController
 @RequestMapping("/api/reservas")
@@ -54,9 +55,17 @@ public class ReservationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
+    /*
+     * @PostMapping("/{id}/cancelar")
+     * public ResponseEntity<ReservationDTO> cancel(@PathVariable Long id) {
+     * return ResponseEntity.ok(reservationService.cancel(id));
+     * }
+     */
+
     @PostMapping("/{id}/cancelar")
-    public ResponseEntity<ReservationDTO> cancel(@PathVariable Long id) {
-        return ResponseEntity.ok(reservationService.cancel(id));
+    public ResponseEntity<Void> cancel(@PathVariable Long id) {
+        reservationService.cancel(id);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}")

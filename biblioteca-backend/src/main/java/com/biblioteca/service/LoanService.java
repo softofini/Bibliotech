@@ -101,7 +101,7 @@ public class LoanService {
         return saved;
     }
 
-    @Transactional
+    /*@Transactional
     public LoanDTO returnLoan(Long loanId) {
         Loan loan = findEntityById(loanId);
 
@@ -116,6 +116,18 @@ public class LoanService {
         Loan saved = loanRepository.save(loan);
         log.info("Devolução registrada: loanId={}", loanId);
         return LoanDTO.fromEntity(saved);
+    }*/
+
+    @Transactional
+    public LoanDTO returnLoan(Long loanId) {
+    Loan loan = findEntityById(loanId);
+    
+     // Define o status como FINALIZADO para o State reconhecer
+     loan.setStatus(Loan.LoanStatus.FINALIZADO);
+     Loan saved = loanRepository.save(loan);
+    
+     log.info("Status do empréstimo {} alterado para FINALIZADO no banco", loanId);
+     return LoanDTO.fromEntity(saved);
     }
 
     @Transactional

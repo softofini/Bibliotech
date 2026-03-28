@@ -94,7 +94,7 @@ public class ReservationService {
 
     // ─── Cancelamento ────────────────────────────────────────────────────────────
 
-    @Transactional
+    /*@Transactional
     public ReservationDTO cancel(Long id) {
         Reservation reservation = findEntityById(id);
 
@@ -109,13 +109,13 @@ public class ReservationService {
         Reservation saved = reservationRepository.save(reservation);
         log.info("Reserva cancelada: id={}", id);
         return ReservationDTO.fromEntity(saved);
-    }
+    }*/
 
     /**
      * Marca a reserva como DISPONIVEL quando o livro for devolvido.
      * Chamado internamente pelo {@link com.biblioteca.facade.LoanFacade}.
      */
-    @Transactional
+    /*@Transactional
     public void notifyAvailability(Long bookId) {
         List<Reservation> pending = reservationRepository
                 .findByBookId(bookId)
@@ -133,7 +133,36 @@ public class ReservationService {
             );
             log.info("Reserva id={} marcada como DISPONIVEL.", r.getId());
         });
+    }*/
+
+    @Transactional
+    public void notifyAvailability(Long bookId) {
+        // Busca a reserva mais antiga (primeiro da fila) que está PENDENTE
+        List<Reservation> pending = reservationRepository.findByBookId(bookId)
+            .stream()
+            .filter(r -> r.getStatus() == Reservation.ReservationStatus.PENDENTE)
+            .toList();
+
+    if (!pending.isEmpty()) {
+        Reservation nextInLine = pending.get(0); 
+        
+        // O livro fica "reservado" especificamente para esta pessoa
+        nextInLine.setStatus(Reservation.ReservationStatus.DISPONIVEL);
+        reservationRepository.save(nextInLine);
+
+        notificationService.createInternal(
+                "Livro Disponível",
+                "O livro \"" + nextInLine.getBook().getTitle() + "\" está pronto para si!",
+                Notification.NotificationType.SUCCESS
+         );
+        }
     }
+
+
+@Transactional
+public void cancel(Long id) {
+    reservationRepository.deleteById(id);
+}
 
     @Transactional
     public void delete(Long id) {
